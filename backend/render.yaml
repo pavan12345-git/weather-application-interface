@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: weather-backend
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt && python manage.py migrate && python manage.py collectstatic --noinput
+    startCommand: gunicorn weather_app.wsgi:application --bind 0.0.0.0:$PORT
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: False
+      - key: ALLOWED_HOSTS
+        value: weather-backend.onrender.com
+      - key: OPENWEATHER_API_KEY
+        sync: false
+      - key: CORS_ALLOWED_ORIGINS
+        value: https://weather-frontend.onrender.com
+      - key: DATABASE_URL
+        value: sqlite:///db.sqlite3

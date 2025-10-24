@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: weather-frontend
+    env: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        value: https://weather-backend.onrender.com/api
