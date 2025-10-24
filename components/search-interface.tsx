@@ -7,56 +7,43 @@ import { Search, X, Loader2, MapPin, Clock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/use-toast"
+import { searchLocation } from "@/utils/api"
 
 interface SearchResult {
-  id: string
-  city: string
-  country: string
-  flag: string
+  id?: string
+  city?: string
+  country?: string
+  flag?: string
   lat: number
   lon: number
+  name?: string
+  state?: string
 }
 
 interface SearchInterfaceProps {
-  onSelectLocation?: (location: SearchResult) => void
+  onSelectLocation?: (location: { name: string; country?: string; state?: string; lat: number; lon: number }) => void
   onClose?: () => void
 }
 
 export default function SearchInterface({ onSelectLocation, onClose }: SearchInterfaceProps) {
   const { toast } = useToast()
   const [query, setQuery] = useState("")
-  const [results, setResults] = useState<SearchResult[]>([])
-  const [recentSearches, setRecentSearches] = useState<SearchResult[]>([])
+  const [results, setResults] = useState<Array<{ name: string; country?: string; state?: string; lat: number; lon: number }>>([])
+  const [recentSearches, setRecentSearches] = useState<Array<{ name: string; country?: string; state?: string; lat: number; lon: number }>>([])
   const [isLoading, setIsLoading] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState(-1)
   const [isGeoLoading, setIsGeoLoading] = useState(false)
   const debounceTimer = useRef<NodeJS.Timeout>()
 
-  // Mock search data
-  const mockCities: SearchResult[] = [
-    { id: "1", city: "San Francisco", country: "United States", flag: "🇺🇸", lat: 37.7749, lon: -122.4194 },
-    { id: "2", city: "New York", country: "United States", flag: "🇺🇸", lat: 40.7128, lon: -74.006 },
-    { id: "3", city: "Los Angeles", country: "United States", flag: "🇺🇸", lat: 34.0522, lon: -118.2437 },
-    { id: "4", city: "London", country: "United Kingdom", flag: "🇬🇧", lat: 51.5074, lon: -0.1278 },
-    { id: "5", city: "Paris", country: "France", flag: "🇫🇷", lat: 48.8566, lon: 2.3522 },
-    { id: "6", city: "Tokyo", country: "Japan", flag: "🇯🇵", lat: 35.6762, lon: 139.6503 },
-    { id: "7", city: "Sydney", country: "Australia", flag: "🇦🇺", lat: -33.8688, lon: 151.2093 },
-    { id: "8", city: "Dubai", country: "United Arab Emirates", flag: "🇦🇪", lat: 25.2048, lon: 55.2708 },
-  ]
-
-  // Load recent searches from localStorage
   useEffect(() => {
     const stored = localStorage.getItem("recentSearches")
     if (stored) {
       try {
         setRecentSearches(JSON.parse(stored).slice(0, 5))
-      } catch (e) {
-        // Ignore parse errors
-      }
+      } catch {}
     }
   }, [])
 
-  // Debounced search
   const handleSearch = useCallback((value: string) => {
     setQuery(value)
     setSelectedIndex(-1)
@@ -70,24 +57,21 @@ export default function SearchInterface({ onSelectLocation, onClose }: SearchInt
       return
     }
 
-    debounceTimer.current = setTimeout(() => {
+    debounceTimer.current = setTimeout(async () => {
       setIsLoading(true)
-      // Simulate API call
-      setTimeout(() => {
-        const filtered = mockCities.filter(
-          (city) =>
-            city.city.toLowerCase().includes(value.toLowerCase()) ||
-            city.country.toLowerCase().includes(value.toLowerCase()),
-        )
-        setResults(filtered.slice(0, 5))
+      try {
+        const res = await searchLocation(value)
+        setResults(res)
+      } catch {
+        setResults([])
+      } finally {
         setIsLoading(false)
-      }, 300)
+      }
     }, 300)
   }, [])
 
-  const handleSelectResult = (result: SearchResult) => {
-    // Add to recent searches
-    const updated = [result, ...recentSearches.filter((r) => r.id !== result.id)].slice(0, 5)
+  const handleSelectResult = (result: { name: string; country?: string; state?: string; lat: number; lon: number }) => {
+    const updated = [result, ...recentSearches.filter((r) => r.name !== result.name)].slice(0, 5)
     setRecentSearches(updated)
     localStorage.setItem("recentSearches", JSON.stringify(updated))
 
@@ -112,32 +96,18 @@ export default function SearchInterface({ onSelectLocation, onClose }: SearchInt
         )
       })
 
-      // Find nearest city (mock)
-      const nearest = mockCities.reduce((prev, curr) => {
-        const prevDist = Math.hypot(prev.lat - position.latitude, prev.lon - position.longitude)
-        const currDist = Math.hypot(curr.lat - position.latitude, curr.lon - position.longitude)
-        return currDist < prevDist ? curr : prev
-      })
-
-      handleSelectResult(nearest)
+      // Reverse geocoding is handled in pages; we pass raw coords here
+      handleSelectResult({ name: `${position.latitude.toFixed(2)}, ${position.longitude.toFixed(2)}` as string, lat: position.latitude, lon: position.longitude })
       toast({
         title: "Location found",
-        description: `Using ${nearest.city}, ${nearest.country}`,
+        description: `Using your current coordinates`,
       })
     } catch (error: any) {
       let message = "Unable to get your location"
-      if (error.code === 1) {
-        message = "Permission denied. Please enable location access."
-      } else if (error.code === 2) {
-        message = "Location unavailable. Please try again."
-      } else if (error.code === 3) {
-        message = "Location request timed out. Please try again."
-      }
-      toast({
-        title: "Location error",
-        description: message,
-        variant: "destructive",
-      })
+      if (error.code === 1) message = "Permission denied. Please enable location access."
+      else if (error.code === 2) message = "Location unavailable. Please try again."
+      else if (error.code === 3) message = "Location request timed out. Please try again."
+      toast({ title: "Location error", description: message, variant: "destructive" })
     } finally {
       setIsGeoLoading(false)
     }
@@ -160,7 +130,6 @@ export default function SearchInterface({ onSelectLocation, onClose }: SearchInt
 
   return (
     <div className="w-full max-w-2xl mx-auto">
-      {/* Search Input */}
       <div className="relative mb-6">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
@@ -186,7 +155,6 @@ export default function SearchInterface({ onSelectLocation, onClose }: SearchInt
           )}
         </div>
 
-        {/* Autocomplete Dropdown */}
         {(results.length > 0 || isLoading) && (
           <div className="absolute top-full left-0 right-0 mt-2 bg-background border border-border rounded-lg shadow-lg z-50">
             {isLoading ? (
@@ -198,7 +166,7 @@ export default function SearchInterface({ onSelectLocation, onClose }: SearchInt
               <div className="max-h-80 overflow-y-auto">
                 {results.map((result, index) => (
                   <button
-                    key={result.id}
+                    key={`${result.name}-${result.lat}-${result.lon}`}
                     onClick={() => handleSelectResult(result)}
                     className={`w-full px-4 py-3 text-left transition-colors border-b border-border last:border-b-0 ${
                       index === selectedIndex ? "bg-secondary" : "hover:bg-secondary/50"
@@ -206,10 +174,8 @@ export default function SearchInterface({ onSelectLocation, onClose }: SearchInt
                   >
                     <div className="flex items-start justify-between">
                       <div>
-                        <p className="font-semibold">
-                          {result.flag} {result.city}
-                        </p>
-                        <p className="text-sm text-muted-foreground">{result.country}</p>
+                        <p className="font-semibold">{result.name}</p>
+                        <p className="text-sm text-muted-foreground">{[result.state, result.country].filter(Boolean).join(", ")}</p>
                       </div>
                       <p className="text-xs text-muted-foreground">
                         {result.lat.toFixed(2)}°, {result.lon.toFixed(2)}°
@@ -225,7 +191,6 @@ export default function SearchInterface({ onSelectLocation, onClose }: SearchInt
         )}
       </div>
 
-      {/* Recent Searches */}
       {!query && recentSearches.length > 0 && (
         <div className="mb-6">
           <div className="flex items-center justify-between mb-3">
@@ -237,16 +202,14 @@ export default function SearchInterface({ onSelectLocation, onClose }: SearchInt
           <div className="space-y-2">
             {recentSearches.map((search) => (
               <button
-                key={search.id}
+                key={`${search.name}-${search.lat}-${search.lon}`}
                 onClick={() => handleSelectResult(search)}
                 className="w-full flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-secondary transition-colors text-left"
               >
                 <Clock className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                 <div>
-                  <p className="font-medium">
-                    {search.flag} {search.city}
-                  </p>
-                  <p className="text-xs text-muted-foreground">{search.country}</p>
+                  <p className="font-medium">{search.name}</p>
+                  <p className="text-xs text-muted-foreground">{[search.state, search.country].filter(Boolean).join(", ")}</p>
                 </div>
               </button>
             ))}
@@ -254,7 +217,6 @@ export default function SearchInterface({ onSelectLocation, onClose }: SearchInt
         </div>
       )}
 
-      {/* Geolocation Section */}
       {!query && (
         <div>
           <Button

@@ -170,9 +170,11 @@ export default function Navigation({ tempUnit, onTempUnitChange }: NavigationPro
                 °C
               </Button>
             </div>
-            <Button variant="ghost" className="w-full justify-start">
-              Profile
-            </Button>
+            <Link href="/profile" className="w-full">
+              <Button variant="ghost" className="w-full justify-start">
+                Profile
+              </Button>
+            </Link>
           </div>
         )}
       </div>

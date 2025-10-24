@@ -38,18 +38,24 @@ export default function HourlyForecast({ forecast, tempUnit, convertTemp }: Hour
           className="flex gap-3 overflow-x-auto pb-4 scroll-smooth"
           style={{ scrollBehavior: "smooth" }}
         >
-          {forecast.map((hour, index) => (
-            <Card
-              key={index}
-              className="flex-shrink-0 w-24 p-4 flex flex-col items-center justify-center text-center space-y-2 hover:shadow-lg transition-shadow"
-            >
-              <p className="text-sm font-semibold text-muted-foreground">{hour.time}</p>
-              <p className="text-2xl">{hour.icon}</p>
-              <p className="text-lg font-bold">
-                {convertTemp(hour.temp)}°{tempUnit}
-              </p>
-            </Card>
-          ))}
+          {forecast.length > 0 ? (
+            forecast.map((hour, index) => (
+              <Card
+                key={index}
+                className="flex-shrink-0 w-24 p-4 flex flex-col items-center justify-center text-center space-y-2 hover:shadow-lg transition-shadow"
+              >
+                <p className="text-sm font-semibold text-muted-foreground">{hour.time}</p>
+                <p className="text-2xl">{hour.icon}</p>
+                <p className="text-lg font-bold">
+                  {convertTemp(hour.temp)}°{tempUnit}
+                </p>
+              </Card>
+            ))
+          ) : (
+            <div className="flex items-center justify-center w-full py-8">
+              <p className="text-muted-foreground">Loading 24-hour forecast...</p>
+            </div>
+          )}
         </div>
 
         {/* Scroll buttons */}

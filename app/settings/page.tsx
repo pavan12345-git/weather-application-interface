@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Save, AlertCircle, Download, Trash2, RotateCcw, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -20,12 +20,21 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { useToast } from "@/components/ui/use-toast"
+import { getPreferences, updatePreferences, getUserLocations, deleteLocation as apiDeleteLocation } from "@/utils/api"
+
+interface SavedLocation {
+  id: number
+  city_name: string
+  country: string
+}
 
 export default function SettingsPage() {
   const { toast } = useToast()
   const [hasChanges, setHasChanges] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [showSaved, setShowSaved] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   // Display Preferences
   const [tempUnit, setTempUnit] = useState<"C" | "F">("F")
@@ -34,8 +43,8 @@ export default function SettingsPage() {
   const [timeFormat, setTimeFormat] = useState<"12h" | "24h">("12h")
 
   // Default Location
-  const [defaultLocation, setDefaultLocation] = useState("San Francisco")
-  const locations = ["San Francisco", "New York", "Los Angeles"]
+  const [defaultLocation, setDefaultLocation] = useState<number | null>(null)
+  const [savedLocations, setSavedLocations] = useState<SavedLocation[]>([])
 
   // Notifications
   const [weatherAlerts, setWeatherAlerts] = useState(true)
@@ -43,29 +52,98 @@ export default function SettingsPage() {
   const [summaryTime, setSummaryTime] = useState("08:00")
   const [email, setEmail] = useState("user@example.com")
 
+  // Load preferences and locations on mount
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        const [prefs, locations] = await Promise.all([
+          getPreferences(),
+          getUserLocations()
+        ])
+        
+        setTempUnit(prefs.temperature_unit || "F")
+        setTheme(prefs.theme || "auto")
+        setDefaultLocation(prefs.default_location)
+        setSavedLocations(locations || [])
+        
+        // Apply theme immediately
+        applyTheme(prefs.theme || "auto")
+      } catch (e: any) {
+        setError(e?.message || "Failed to load settings")
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadData()
+  }, [])
+
+  const applyTheme = (newTheme: "light" | "dark" | "auto") => {
+    const root = document.documentElement
+    if (newTheme === "light") {
+      root.classList.remove("dark")
+    } else if (newTheme === "dark") {
+      root.classList.add("dark")
+    } else {
+      // Auto - use system preference
+      if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
+        root.classList.add("dark")
+      } else {
+        root.classList.remove("dark")
+      }
+    }
+  }
+
   const handleChange = () => {
     setHasChanges(true)
   }
 
   const handleSave = async () => {
     setIsSaving(true)
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-    setIsSaving(false)
-    setHasChanges(false)
-    setShowSaved(true)
-    setTimeout(() => setShowSaved(false), 3000)
-    toast({
-      title: "Settings saved",
-      description: "Your preferences have been updated successfully.",
-    })
+    try {
+      await updatePreferences({
+        temperature_unit: tempUnit,
+        theme: theme,
+        default_location: defaultLocation,
+      })
+      
+      // Apply changes immediately
+      applyTheme(theme)
+      
+      setIsSaving(false)
+      setHasChanges(false)
+      setShowSaved(true)
+      setTimeout(() => setShowSaved(false), 3000)
+      toast({
+        title: "Settings saved",
+        description: "Your preferences have been updated successfully.",
+      })
+    } catch (e: any) {
+      setIsSaving(false)
+      toast({
+        title: "Save failed",
+        description: e?.message || "Failed to save settings",
+        variant: "destructive",
+      })
+    }
   }
 
-  const handleClearCache = () => {
-    toast({
-      title: "Cache cleared",
-      description: "Application cache has been cleared.",
-    })
+  const handleClearCache = async () => {
+    try {
+      // Clear localStorage cache
+      localStorage.removeItem("recentSearches")
+      toast({
+        title: "Cache cleared",
+        description: "Application cache has been cleared.",
+      })
+    } catch (e) {
+      toast({
+        title: "Cache clear failed",
+        description: "Failed to clear cache",
+        variant: "destructive",
+      })
+    }
   }
 
   const handleExportData = () => {
@@ -80,6 +158,7 @@ export default function SettingsPage() {
         dailySummary,
         summaryTime,
       },
+      locations: savedLocations,
       exportedAt: new Date().toISOString(),
     }
     const json = JSON.stringify(data, null, 2)
@@ -96,28 +175,81 @@ export default function SettingsPage() {
     })
   }
 
-  const handleDeleteLocations = () => {
-    toast({
-      title: "Locations deleted",
-      description: "All saved locations have been removed.",
-    })
+  const handleDeleteLocations = async () => {
+    try {
+      // Delete all saved locations
+      for (const loc of savedLocations) {
+        await apiDeleteLocation(loc.id)
+      }
+      setSavedLocations([])
+      setDefaultLocation(null)
+      toast({
+        title: "Locations deleted",
+        description: "All saved locations have been removed.",
+      })
+    } catch (e: any) {
+      toast({
+        title: "Delete failed",
+        description: e?.message || "Failed to delete locations",
+        variant: "destructive",
+      })
+    }
   }
 
-  const handleResetDefaults = () => {
-    setTempUnit("F")
-    setTheme("auto")
-    setDateFormat("MM/DD/YYYY")
-    setTimeFormat("12h")
-    setDefaultLocation("San Francisco")
-    setWeatherAlerts(true)
-    setDailySummary(false)
-    setSummaryTime("08:00")
-    setEmail("user@example.com")
-    setHasChanges(false)
-    toast({
-      title: "Settings reset",
-      description: "All settings have been restored to defaults.",
-    })
+  const handleResetDefaults = async () => {
+    try {
+      await updatePreferences({
+        temperature_unit: "F",
+        theme: "auto",
+        default_location: null,
+      })
+      
+      setTempUnit("F")
+      setTheme("auto")
+      setDateFormat("MM/DD/YYYY")
+      setTimeFormat("12h")
+      setDefaultLocation(null)
+      setWeatherAlerts(true)
+      setDailySummary(false)
+      setSummaryTime("08:00")
+      setEmail("user@example.com")
+      setHasChanges(false)
+      
+      applyTheme("auto")
+      
+      toast({
+        title: "Settings reset",
+        description: "All settings have been restored to defaults.",
+      })
+    } catch (e: any) {
+      toast({
+        title: "Reset failed",
+        description: e?.message || "Failed to reset settings",
+        variant: "destructive",
+      })
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading settings...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <AlertCircle className="h-8 w-8 text-destructive mx-auto mb-4" />
+          <p className="text-destructive">{error}</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -191,6 +323,7 @@ export default function SettingsPage() {
                   value={theme}
                   onValueChange={(value: any) => {
                     setTheme(value)
+                    applyTheme(value)
                     handleChange()
                   }}
                 >
@@ -283,24 +416,38 @@ export default function SettingsPage() {
                 <Label htmlFor="location" className="text-base font-medium mb-2 block">
                   Select Default Location
                 </Label>
-                <Select
-                  value={defaultLocation}
-                  onValueChange={(value) => {
-                    setDefaultLocation(value)
-                    handleChange()
-                  }}
-                >
-                  <SelectTrigger id="location">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {locations.map((loc) => (
-                      <SelectItem key={loc} value={loc}>
-                        {loc}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="flex gap-2">
+                  <Select
+                    value={defaultLocation ? String(defaultLocation) : undefined}
+                    onValueChange={(value) => {
+                      setDefaultLocation(Number(value))
+                      handleChange()
+                    }}
+                  >
+                    <SelectTrigger id="location" className="flex-1">
+                      <SelectValue placeholder="No default location" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {savedLocations.map((loc) => (
+                        <SelectItem key={loc.id} value={String(loc.id)}>
+                          {loc.city_name}, {loc.country}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {defaultLocation && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setDefaultLocation(null)
+                        handleChange()
+                      }}
+                    >
+                      Clear
+                    </Button>
+                  )}
+                </div>
               </div>
               <p className="text-sm text-muted-foreground">This location will be shown when you open the app</p>
             </div>

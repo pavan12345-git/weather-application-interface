@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, Calendar, MapPin, Settings } from "lucide-react"
+import { Home, Calendar, MapPin, User } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 export default function BottomNavigation() {
@@ -12,7 +12,7 @@ export default function BottomNavigation() {
     { href: "/", label: "Home", icon: Home },
     { href: "/forecast", label: "Forecast", icon: Calendar },
     { href: "/locations", label: "Locations", icon: MapPin },
-    { href: "/settings", label: "Settings", icon: Settings },
+    { href: "/profile", label: "Profile", icon: User },
   ]
 
   return (
