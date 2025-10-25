@@ -69,7 +69,7 @@ git push origin main
    - **Name**: `weather-frontend`
    - **Root Directory**: `./` (root of your project)
    - **Environment**: `Node`
-   - **Build Command**: `npm install && npm run build`
+   - **Build Command**: `npm install --legacy-peer-deps && npm run build`
    - **Start Command**: `npm start`
 
 4. **Set Environment Variables:**
@@ -78,6 +78,8 @@ git push origin main
    ```
 
 5. **Deploy Frontend**
+
+**Note**: If you still encounter dependency conflicts, you can use the alternative `package-render.json` by renaming it to `package.json` before deployment.
 
 ## 🔧 Configuration Files
 
@@ -183,16 +185,28 @@ deploy-render.bat
 - Verify all dependencies are in requirements.txt
 - Check Python version compatibility
 
-#### 2. CORS Errors
+#### 2. Frontend Dependency Conflicts
+If you encounter `ERESOLVE` errors with React 19 and packages like `vaul`:
+- **Solution 1**: Use the updated build command with `--legacy-peer-deps`
+- **Solution 2**: Use the alternative `package-render.json` (React 18 compatible)
+- **Solution 3**: Add `.npmrc` file with `legacy-peer-deps=true`
+
+#### 3. Recharts Module Not Found Error
+If you encounter `Module not found: Can't resolve 'react-is'` error:
+- **Solution 1**: The updated package.json now includes `react-is` dependency
+- **Solution 2**: Use `package-fixed.json` (React 18 with all dependencies)
+- **Solution 3**: Add `react-is` manually to dependencies
+
+#### 4. CORS Errors
 - Ensure `CORS_ALLOWED_ORIGINS` includes your frontend URL
 - Check backend CORS configuration
 
-#### 3. API Connection Issues
+#### 5. API Connection Issues
 - Verify `NEXT_PUBLIC_API_URL` is correct
 - Check backend logs for errors
 - Ensure backend is accessible
 
-#### 4. Database Issues
+#### 6. Database Issues
 - Check if migrations are running
 - Verify database configuration
 - Check for SQLite file permissions
